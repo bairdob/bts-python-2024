@@ -1,98 +1,150 @@
+import copy
+import distutils
 import xml.etree.ElementTree as ET
 from enum import Enum
 from pathlib import Path
 from pprint import pprint
-
-PATH_TO_XML = Path(__file__).parent.joinpath('input', 'impulse_test_input.xml')
-tree = ET.parse(PATH_TO_XML)
-root = tree.getroot()
+from typing import Tuple, List
 
 
 class Types(Enum):
+    """Енам тегов xml."""
+
     CLASS = 'class'
     ATTRIBUTE = 'attribute'
     AGGREGATION = 'aggregation'
 
 
-classes = set()
-aggregations = set()
+class AggregationElement:
+    """Класс, отвечающий за тэг Aggregation."""
 
-for element in root:
-    # print(element.tag, element.attrib)
-    if element.tag.lower() == Types.CLASS.value:
-        childs = list()
-        # у поля Class может быть элемент Attribute
+    source: str = ...
+    """Класс источник"""
+    target: str = ...
+    """Целевой класс"""
+    sourceMultiplicity: str = ...
+    """Множество источника"""
+    targetMultiplicity: int = ...
+    """Множество цели"""
+
+    def __init__(self, element):
+        """
+        :param element: xml элемент
+        """
+        self.source = element.get('source')
+        self.target = element.get('target')
+        self.sourceMultiplicity = element.get('sourceMultiplicity')
+        self.targetMultiplicity = int(element.get('targetMultiplicity'))
+
+    def to_dict(self):
+        """Получаем словарь полей класса."""
+        return self.__dict__
+
+    def __repr__(self):
+        return '<{cls_name}({data})>'.format(cls_name=self.__class__.__name__,
+                                             data=', '.join(('{}={}'.format(k, v) for k, v in self.__dict__.items())))
+
+
+class ClassElement:
+    """Класс, отвечающий за тэг Class."""
+
+    name: str = ...
+    """Имя"""
+    isRoot: bool = ...
+    """Корень"""
+    documentation: str = ...
+    """Документация"""
+    attributes: list = ...
+    """Аттрибуты"""
+    max: str = ...  # str(int)
+    """Максимальное значение"""
+    min: str = ...  # str(int)
+    """Минимальное значение"""
+    __DELIMETER = '..'
+    """Разделитель поля sourceMultiplicity"""
+
+    def __init__(self, element: ET.Element):
+        """
+        :param element: xml элемент
+        """
+        self.name = element.get('name')
+        self.isRoot = bool(distutils.util.strtobool(element.get('isRoot')))
+        self.documentation = element.get('documentation')
+        self.attributes = []
         for child in element:
-            childs.append(child.attrib)
-        element.attrib.update({Types.ATTRIBUTE.value: childs})
-        classes.add(element)
-    elif element.tag.lower() == Types.AGGREGATION.value:
-        aggregations.add(element)
+            if child.tag.lower() == Types.ATTRIBUTE.value:
+                self.attributes.append(child.attrib)
 
-for class_ in classes:
-    for aggregation in aggregations:
-        if aggregation.get('source') == class_.get('name'):
-            class_.attrib.update(aggregation.attrib)
+    def __repr__(self):
+        return '<{cls_name}({data})>'.format(cls_name=self.__class__.__name__,
+                                             data=', '.join(('{}={}'.format(k, v) for k, v in self.__dict__.items())))
 
-# for class_ in classes:
-#     pprint(class_.attrib)
+    def to_dict(self):
+        """Получаем словарь полей класса с переименованием."""
+        dict_copy = copy.deepcopy(self.__dict__)
 
-# все уникальные имена классов
-class_names = set(class_.attrib['name'] for class_ in classes)
-# print(class_names)
+        # переименование ключей
+        dict_copy['parameters'] = dict_copy.pop('attributes')
+        dict_copy['class'] = dict_copy.pop('name')
 
-DELIMITER = '..'
-for class_ in classes:
-    class_.attrib['parameters'] = class_.attrib.pop('attribute')
-    class_.attrib['class'] = class_.attrib.pop('name')
+        return dict_copy
 
-    try:
-        multiplier = int(class_.attrib.get('targetMultiplicity'))
-    except TypeError as e:
-        pass
-    else:
-        class_.attrib.pop('targetMultiplicity')
-        try:
-            min_src, max_src = map(int, class_.attrib.get('sourceMultiplicity').split(DELIMITER))
-        # если рутовый
-        except AttributeError:
-            min_src, max_src = class_.attrib.get('sourceMultiplicity'), class_.attrib.get('sourceMultiplicity')
-        except ValueError as e:
-            min_src, max_src = class_.attrib.get('sourceMultiplicity'), class_.attrib.get('sourceMultiplicity')
-        finally:
-            class_.attrib['min'], class_.attrib['max'] = str(min_src*multiplier), str(max_src*multiplier)
-        class_.attrib.pop('sourceMultiplicity')
+    def update_attributes(self, attribute: AggregationElement) -> None:
+        """Обновляем аттрибуты тега Aggregation"""
+        self.attributes.append({"name": attribute.source, "type": "class"})
 
-    if class_.attrib.get('source') == class_.attrib.get('class'):
-        class_.attrib.pop('source')
-
-    cur_class = class_.attrib.get('class')
-
-    # print('______________')
-    # pprint(class_.attrib)
-    # print('______________')
+    def update_min_max(self, attribute: AggregationElement) -> None:
+        """Обновляем min, max тега Aggregation"""
+        if self.__DELIMETER in attribute.sourceMultiplicity:
+            min_src, max_src = map(int, attribute.sourceMultiplicity.split(self.__DELIMETER))
+        else:
+            min_src, max_src = int(attribute.sourceMultiplicity), int(attribute.sourceMultiplicity)
+        self.min, self.max = str(min_src * attribute.targetMultiplicity), str(max_src * attribute.targetMultiplicity)
 
 
-result_dicts = dict()
+class XMLParser:
+    """Парсер xml файла. Извлекает необходимые аттрибуты."""
 
-for class_ in classes:
-    result_dicts[class_.attrib.get('class')] = class_.attrib
+    def __init__(self, file_path: str):
+        """
+        :param file_path: абсолютный путь до файла
+        """
+        self.root = ET.parse(file_path).getroot()
+
+    def extract_classes_and_aggregations(self) -> Tuple[List[ClassElement], List[AggregationElement]]:
+        """
+        Извлекает из документа классы и свойства.
+
+        :return: (список элементов тэга Class, список элементов тэга Aggregation)
+        """
+        classes = []
+        aggregations = []
+
+        for element in self.root:
+            if element.tag.lower() == Types.CLASS.value:
+                classes.append(ClassElement(element))
+            elif element.tag.lower() == Types.AGGREGATION.value:
+                aggregations.append(AggregationElement(element))
+        return classes, aggregations
 
 
-for class_ in classes:
-    if class_.attrib.get('target') in class_names and class_.attrib.get('target') != class_.attrib.get('source'):
-        result_dicts[class_.attrib.get('target')]['parameters'].append(
-            { "name": class_.attrib.get('class'), "type": "class" }
-        )
+def main():
+    PATH_TO_XML = Path(__file__).parent.joinpath('input', 'impulse_test_input.xml')
+    parser = XMLParser(PATH_TO_XML)
+    classes, aggregations = parser.extract_classes_and_aggregations()
 
-for _, v in result_dicts.items():
-    try:
-        del v['target']
-    except Exception:
-        pass
+    for class_ in classes:
+        for aggregation in aggregations:
+            if class_.name == aggregation.target:
+                class_.update_attributes(aggregation)
+            if class_.name == aggregation.source:
+                class_.update_min_max(aggregation)
+
+    for class_ in classes:
+        print("________")
+        pprint(class_.to_dict())
+        print("________")
 
 
-for k, v in result_dicts.items():
-    print('______________')
-    pprint(v)
-    print('______________')
+if __name__ == '__main__':
+    main()
