@@ -105,6 +105,9 @@ class ClassElement:
 class XMLParser:
     """Парсер xml файла. Извлекает необходимые аттрибуты."""
 
+    classes: List[ClassElement] = ...
+    """Список классов тэга Class"""
+
     def __init__(self, file_path: str):
         """
         :param file_path: абсолютный путь до файла
@@ -127,23 +130,28 @@ class XMLParser:
                 aggregations.append(AggregationElement(element))
         return classes, aggregations
 
+    def parse(self):
+        """Получаем классы."""
+        classes, aggregations = self.extract_classes_and_aggregations()
+
+        for class_ in classes:
+            for aggregation in aggregations:
+                if class_.name == aggregation.target:
+                    class_.update_attributes(aggregation)
+                if class_.name == aggregation.source:
+                    class_.update_min_max(aggregation)
+        self.classes = classes
+
+    def to_meta(self):
+        """Получаем список классов для загрузки в meta.json."""
+        return [class_.to_dict() for class_ in self.classes]
+
 
 def main():
-    PATH_TO_XML = Path(__file__).parent.joinpath('input', 'impulse_test_input.xml')
+    PATH_TO_XML = str(Path(__file__).parent.joinpath('input', 'impulse_test_input.xml'))
     parser = XMLParser(PATH_TO_XML)
-    classes, aggregations = parser.extract_classes_and_aggregations()
-
-    for class_ in classes:
-        for aggregation in aggregations:
-            if class_.name == aggregation.target:
-                class_.update_attributes(aggregation)
-            if class_.name == aggregation.source:
-                class_.update_min_max(aggregation)
-
-    for class_ in classes:
-        print("________")
-        pprint(class_.to_dict())
-        print("________")
+    parser.parse()
+    pprint(parser.to_meta())
 
 
 if __name__ == '__main__':
