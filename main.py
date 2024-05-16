@@ -105,7 +105,7 @@ class ClassElement:
 class XMLParser:
     """Парсер xml файла. Извлекает необходимые аттрибуты."""
 
-    classes: List[ClassElement] = ...
+    classes: dict[str, ClassElement] = {}
     """Список классов тэга Class"""
 
     def __init__(self, file_path: str):
@@ -140,11 +140,11 @@ class XMLParser:
                     class_.update_attributes(aggregation)
                 if class_.name == aggregation.source:
                     class_.update_min_max(aggregation)
-        self.classes = classes
+        self.classes = {class_.name: class_ for class_ in classes}
 
     def to_meta(self):
         """Получаем список классов для загрузки в meta.json."""
-        return [class_.to_dict() for class_ in self.classes]
+        return [class_.to_dict() for class_ in self.classes.values()]
 
 
 def main():
