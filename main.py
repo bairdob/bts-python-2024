@@ -1,5 +1,6 @@
 import copy
 import distutils
+import json
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -197,12 +198,53 @@ class XMLParser:
         return root_element
 
 
+class XMLStorage:
+    """ Класс записывающий артефакты."""
+
+    CONFIG_NAME = 'config.xml'
+    """Имя файла для конфигурации"""
+    META_NAME = 'meta.json'
+    """Имя файла для метаданных"""
+
+    def __init__(self, output_path: Path):
+        """
+        :param output_path: папка для артефактов
+        """
+        self.path = output_path
+
+    def save_meta(self, data: list) -> None:
+        """
+        Сохраняет артефакт meta.json
+
+        :param data: данные для записи
+        """
+        with open(self.path.joinpath(self.META_NAME), 'w') as file:
+            json_string = json.dumps(data, indent=4, sort_keys=True)
+            file.write(json_string)
+
+    def save_config(self, data: ET.Element) -> None:
+        """
+        Сохраняет артефакт config.xml
+
+        :param data: данные для записи
+        """
+        tree = ET.ElementTree(data)
+        ET.indent(tree, space="    ", level=0)
+        tree.write(self.path.joinpath(self.CONFIG_NAME), xml_declaration=False, method='html')
+
+
 def main():
-    from xml.dom import minidom
-    PATH_TO_XML = Path(__file__).parent.joinpath('input', 'impulse_test_input.xml')
+    PATH_TO_XML = next(Path.cwd().joinpath('input').glob('*.xml'))
+    OUTPUT_PATH = Path.cwd().joinpath('out')
+
     parser = XMLParser(PATH_TO_XML)
     parser.parse()
-    pprint(parser.to_meta())
+    meta_data = parser.to_meta()
+    config_data = parser.to_config()
+
+    storage = XMLStorage(OUTPUT_PATH)
+    storage.save_meta(meta_data)
+    storage.save_config(config_data)
 
 
 if __name__ == '__main__':
