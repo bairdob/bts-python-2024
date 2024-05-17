@@ -128,7 +128,7 @@ class XMLParser:
         """
         self.root = ET.parse(file_path).getroot()
 
-    def extract_classes_and_aggregations(self) -> tuple[list[ClassElement], list[AggregationElement]]:
+    def _extract_classes_and_aggregations(self) -> tuple[list[ClassElement], list[AggregationElement]]:
         """
         Извлекает из документа классы и свойства.
 
@@ -146,7 +146,7 @@ class XMLParser:
 
     def parse(self):
         """Получаем классы с дополненными полями из тэга Aggregation."""
-        classes, aggregations = self.extract_classes_and_aggregations()
+        classes, aggregations = self._extract_classes_and_aggregations()
 
         for class_ in classes:
             for aggregation in aggregations:
@@ -160,9 +160,41 @@ class XMLParser:
         """Получаем список классов для загрузки в meta.json."""
         return [class_.to_dict() for class_ in self.classes.values()]
 
+    def _add_attributes_to_element(self, element: ET.Element, attributes: list) -> None:
+        """
+        Рекурсивно добавляет аттрибуты к элементу.
+
+        :param element: xml элемент к которому добавляем аттрибуты
+        :param attributes: список аттрибутов
+        """
+        for attribute in attributes:
+            if attribute.type != XMLTagsEnum.CLASS.value:
+                param_elem = ET.SubElement(element, attribute.name)
+                param_elem.text = attribute.type
+            else:
+                class_elem = ET.SubElement(element, attribute.name)
+                nested_class = self.classes[attribute.name]
+                self._add_attributes_to_element(class_elem, nested_class.attributes)
+
+    def to_config(self) -> ET.Element:
+        """
+        Получаем дерево xml элементов для загрузки в config.xml.
+
+        :return: элемент с заполненными данными
+        """
+        try:
+            root_class = next(class_ for class_ in self.classes.values() if class_.isRoot)
+        except StopIteration:
+            raise ValueError("В XML-документе не обнаружен корневой класс.")
+
+        root_element = ET.Element(root_class.name)
+        self._add_attributes_to_element(root_element, root_class.attributes)
+
+        return root_element
+
 
 def main():
-    PATH_TO_XML = str(Path(__file__).parent.joinpath('input', 'impulse_test_input.xml'))
+    from xml.dom import minidom
     PATH_TO_XML = Path(__file__).parent.joinpath('input', 'impulse_test_input.xml')
     parser = XMLParser(PATH_TO_XML)
     parser.parse()
