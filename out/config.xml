@@ -6,8 +6,7 @@
             <isFinished>boolean</isFinished>
             <jobId>uint32</jobId>
         </MetricJob>
-        <CPLANE>
-        </CPLANE>
+        <CPLANE></CPLANE>
     </MGMT>
     <HWE>
         <RU>
@@ -17,6 +16,5 @@
             <manufacturerName>string</manufacturerName>
         </RU>
     </HWE>
-    <COMM>
-    </COMM>
+    <COMM></COMM>
 </BTS>
