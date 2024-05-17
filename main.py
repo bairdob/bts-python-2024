@@ -101,6 +101,10 @@ class ClassElement:
         dict_copy['parameters'] = dict_copy.pop('attributes')
         dict_copy['class'] = dict_copy.pop('name')
 
+        if dict_copy.get('isRoot'):
+            dict_copy.pop('min')
+            dict_copy.pop('max')
+
         return dict_copy
 
     def update_attributes(self, attribute: AggregationElement) -> None:
